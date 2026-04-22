@@ -222,14 +222,14 @@ jobs:
             -o "$android_build_dir/combined_bytecode.c" \
             "$android_build_dir/combined.js"
 
-          # 5. Minimal C main that initializes QuickJS + std/os + evals the embedded bytecode.
+          # 5. Minimal C main. qjsc -c emits the bytecode symbols as `static`
+          #    (file-local), so we bring them into the same translation unit
+          #    via #include rather than linking them separately.
           cat > "$android_build_dir/main_android_arm64_entry.c" <<'C_MAIN'
           #include <stdint.h>
           #include <stddef.h>
           #include "quickjs-libc.h"
-
-          extern const uint8_t  qjsc_combined_bytecode[];
-          extern const uint32_t qjsc_combined_bytecode_size;
+          #include "combined_bytecode.c"
 
           int main(int argc, char **argv) {
             JSRuntime *runtime = JS_NewRuntime();
@@ -250,11 +250,12 @@ jobs:
           }
           C_MAIN
 
-          # 6. Cross-compile: static link against target libquickjs.a + glibc-static.
+          # 6. Cross-compile: -I for quickjs headers, another -I for the
+          #    android_build_dir so #include "combined_bytecode.c" resolves.
           aarch64-linux-gnu-gcc -static -O2 \
             -I "$quickjs_dir" \
+            -I "$android_build_dir" \
             "$android_build_dir/main_android_arm64_entry.c" \
-            "$android_build_dir/combined_bytecode.c" \
             "$android_build_dir/libquickjs_arm64.a" \
             -lm -lpthread -ldl \
             -o dist/quick-json-reader-android-arm64
