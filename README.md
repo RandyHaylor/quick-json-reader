@@ -1,4 +1,7 @@
 # Quick JSON Reader
+## cli | ai tool integration | logging | data viewing and inspection
+
+TRY IT HERE!  [randyhaylor.github.io/jsonreader/](https://randyhaylor.github.io/jsonreader/)
 
 > A simple, powerful, and deterministic tool for humans and AI agents to quickly and efficiently view JSON content.
 
