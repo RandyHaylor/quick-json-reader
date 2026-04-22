@@ -349,16 +349,31 @@ jobs:
             mv quick-json-reader-win.exe quick-json-reader-win-x64.exe
           fi
 
-          for binary_name in quick-json-reader-linux-x64 quick-json-reader-linux-arm64 quick-json-reader-macos-x64 quick-json-reader-macos-arm64 quick-json-reader-android-arm64; do
-            if [ -f "$binary_name" ]; then
-              tar -czf "${binary_name}.tar.gz" "$binary_name"
+          # Package each platform binary into its archive with the canonical
+          # inner filename "quick-json-reader" (or "quick-json-reader.exe" for
+          # Windows), so users always invoke "./quick-json-reader ..."
+          # regardless of which archive they downloaded.
+          for per_platform_binary_name in quick-json-reader-linux-x64 quick-json-reader-linux-arm64 quick-json-reader-macos-x64 quick-json-reader-macos-arm64 quick-json-reader-android-arm64; do
+            if [ -f "$per_platform_binary_name" ]; then
+              per_platform_archive_staging_dir="archive_stage_${per_platform_binary_name}"
+              rm -rf "$per_platform_archive_staging_dir"
+              mkdir -p "$per_platform_archive_staging_dir"
+              cp "$per_platform_binary_name" "$per_platform_archive_staging_dir/quick-json-reader"
+              chmod +x "$per_platform_archive_staging_dir/quick-json-reader"
+              tar -czf "${per_platform_binary_name}.tar.gz" -C "$per_platform_archive_staging_dir" quick-json-reader
+              rm -rf "$per_platform_archive_staging_dir"
             else
-              echo "MISSING: $binary_name (will fail fast below)"
+              echo "MISSING: $per_platform_binary_name (will fail fast below)"
             fi
           done
 
           if [ -f quick-json-reader-win-x64.exe ]; then
-            zip quick-json-reader-win-x64.zip quick-json-reader-win-x64.exe
+            windows_archive_staging_dir="archive_stage_win"
+            rm -rf "$windows_archive_staging_dir"
+            mkdir -p "$windows_archive_staging_dir"
+            cp quick-json-reader-win-x64.exe "$windows_archive_staging_dir/quick-json-reader.exe"
+            (cd "$windows_archive_staging_dir" && zip ../quick-json-reader-win-x64.zip quick-json-reader.exe)
+            rm -rf "$windows_archive_staging_dir"
           else
             echo "MISSING: quick-json-reader-win-x64.exe"
           fi

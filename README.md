@@ -300,37 +300,39 @@ Each tagged release publishes the following prebuilt assets at
 <https://github.com/RandyHaylor/quick-json-reader/releases/latest>.
 Pick the one for your target platform.
 
+Every archive below unpacks to a single executable named **`quick-json-reader`** (or `quick-json-reader.exe` on Windows), so every usage example is the same regardless of platform — just grab the right archive for your OS/arch.
+
 ### Linux x64 — `quick-json-reader-linux-x64.tar.gz`
 ```bash
 tar -xzf quick-json-reader-linux-x64.tar.gz
-./quick-json-reader-linux-x64 input.json --show-stats
+./quick-json-reader input.json --show-stats
 ```
 
 ### Linux arm64 — `quick-json-reader-linux-arm64.tar.gz`
 For aarch64 Linux (Raspberry Pi, ARM VPS, ChromeOS Linux container).
 ```bash
 tar -xzf quick-json-reader-linux-arm64.tar.gz
-./quick-json-reader-linux-arm64 input.json --search-vals error
+./quick-json-reader input.json --search-vals error
 ```
 
 ### macOS Apple Silicon — `quick-json-reader-macos-arm64.tar.gz`
 For M1/M2/M3 Macs. Unsigned; first run may require right-click → Open to bypass Gatekeeper.
 ```bash
 tar -xzf quick-json-reader-macos-arm64.tar.gz
-./quick-json-reader-macos-arm64 input.json --output json
+./quick-json-reader input.json --output json
 ```
 
 ### macOS Intel — `quick-json-reader-macos-x64.tar.gz`
 For Intel Macs. Same Gatekeeper note as Apple Silicon.
 ```bash
 tar -xzf quick-json-reader-macos-x64.tar.gz
-./quick-json-reader-macos-x64 input.json --show-schema
+./quick-json-reader input.json --show-schema
 ```
 
 ### Windows x64 — `quick-json-reader-win-x64.zip`
 ```powershell
 Expand-Archive quick-json-reader-win-x64.zip -DestinationPath .
-.\quick-json-reader-win-x64.exe input.json --exclude-fields-matching token password
+.\quick-json-reader.exe input.json --exclude-fields-matching token password
 ```
 
 ### Android arm64 (native, static) — `quick-json-reader-android-arm64.tar.gz`
@@ -338,8 +340,8 @@ Statically-linked aarch64 binary built via QuickJS. Works in `adb shell`, Termux
 ```bash
 tar -xzf quick-json-reader-android-arm64.tar.gz
 # adb shell (dev):
-adb push quick-json-reader-android-arm64 /data/local/tmp/
-adb shell /data/local/tmp/quick-json-reader-android-arm64 /sdcard/input.json --output json
+adb push quick-json-reader /data/local/tmp/
+adb shell /data/local/tmp/quick-json-reader /sdcard/input.json --output json
 ```
 
 ### Static web build — `quick-json-reader-web.zip`
