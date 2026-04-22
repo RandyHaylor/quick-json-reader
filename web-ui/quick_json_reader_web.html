@@ -86,11 +86,11 @@
       </div>
 
       <div class="group">
-        <h2>Hide</h2>
-        <label for="hideMatching">Hide fields matching</label>
-        <input id="hideMatching" type="text" placeholder="text to match fields to hide">
-        <label for="hideContaining">Hide fields containing</label>
-        <input id="hideContaining" type="text" placeholder="text to match fields to hide">
+        <h2>Exclude</h2>
+        <label for="excludeMatching">Exclude fields matching</label>
+        <input id="excludeMatching" type="text" placeholder="text to match fields to exclude">
+        <label for="excludeContaining">Exclude fields containing</label>
+        <input id="excludeContaining" type="text" placeholder="text to match fields to exclude">
       </div>
 
       <div class="group">
@@ -177,8 +177,8 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
       searchKeys: document.getElementById('searchKeys'),
       searchVals: document.getElementById('searchVals'),
       includeChildren: document.getElementById('includeChildren'),
-      hideMatching: document.getElementById('hideMatching'),
-      hideContaining: document.getElementById('hideContaining'),
+      excludeMatching: document.getElementById('excludeMatching'),
+      excludeContaining: document.getElementById('excludeContaining'),
       outputMode: document.getElementById('outputMode'),
       truncateLength: document.getElementById('truncateLength'),
       indentSize: document.getElementById('indentSize'),
@@ -201,7 +201,7 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
       els.showLineNumbers.disabled = isJson || schema;
       if (isJson) els.showLineNumbers.checked = false;
       els.truncateLength.disabled = isJson || schema;
-      const schemaLocks = [els.searchKeys, els.searchVals, els.includeChildren, els.hideMatching, els.hideContaining, els.outputMode, els.indentSize];
+      const schemaLocks = [els.searchKeys, els.searchVals, els.includeChildren, els.excludeMatching, els.excludeContaining, els.outputMode, els.indentSize];
       for (const el of schemaLocks) el.disabled = schema;
       if (schema) {
         els.outputMode.value = 'txt';
@@ -218,8 +218,8 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
         searchKeys: words(els.searchKeys.value),
         searchVals: words(els.searchVals.value),
         includeSearchChildren: els.includeChildren.checked,
-        hideFieldsMatching: words(els.hideMatching.value),
-        hideFieldsContaining: words(els.hideContaining.value),
+        excludeFieldsMatching: words(els.excludeMatching.value),
+        excludeFieldsContaining: words(els.excludeContaining.value),
         truncateLineLength: els.truncateLength.value,
         showLineNumbers: els.showLineNumbers.checked,
         indentSize: els.indentSize.value || 2,
@@ -317,8 +317,8 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
       els.searchKeys.value = '';
       els.searchVals.value = '';
       els.includeChildren.checked = false;
-      els.hideMatching.value = '';
-      els.hideContaining.value = '';
+      els.excludeMatching.value = '';
+      els.excludeContaining.value = '';
       els.outputMode.value = 'txt';
       els.truncateLength.value = '';
       els.indentSize.value = '2';

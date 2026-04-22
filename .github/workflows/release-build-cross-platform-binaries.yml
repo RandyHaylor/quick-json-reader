@@ -1,0 +1,85 @@
+name: Release – build cross-platform binaries
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_tag_name:
+        description: 'Tag to create/update the release for (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish-release:
+    name: Build binaries and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run tests
+        run: node --test tests/test_quick_json_reader.js
+
+      - name: Prepare dist directory
+        run: mkdir -p dist
+
+      - name: Install packager (yao-pkg fork, maintained)
+        run: npm install --no-save @yao-pkg/pkg
+
+      - name: Build cross-platform binaries
+        run: |
+          npx pkg src/quick_json_reader.js \
+            --targets node20-linux-x64,node20-macos-x64,node20-macos-arm64,node20-win-x64 \
+            --output dist/quick-json-reader
+
+      - name: Rename/stage release artifacts
+        run: |
+          cd dist
+          ls -la
+          # yao-pkg outputs: quick-json-reader-linux, quick-json-reader-macos-x64, quick-json-reader-macos-arm64, quick-json-reader-win.exe
+          # Normalize names and compress where helpful.
+          if [ -f quick-json-reader-linux ]; then
+            mv quick-json-reader-linux quick-json-reader-linux-x64
+            tar -czf quick-json-reader-linux-x64.tar.gz quick-json-reader-linux-x64
+          fi
+          if [ -f quick-json-reader-macos-x64 ]; then
+            tar -czf quick-json-reader-macos-x64.tar.gz quick-json-reader-macos-x64
+          fi
+          if [ -f quick-json-reader-macos-arm64 ]; then
+            tar -czf quick-json-reader-macos-arm64.tar.gz quick-json-reader-macos-arm64
+          fi
+          if [ -f quick-json-reader-win.exe ]; then
+            mv quick-json-reader-win.exe quick-json-reader-win-x64.exe
+            zip quick-json-reader-win-x64.zip quick-json-reader-win-x64.exe
+          fi
+          ls -la
+
+      - name: Resolve release tag name
+        id: resolve_release_tag
+        run: |
+          if [ -n "${{ github.event.inputs.release_tag_name }}" ]; then
+            echo "tag=${{ github.event.inputs.release_tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update GitHub Release with binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.resolve_release_tag.outputs.tag }}
+          name: ${{ steps.resolve_release_tag.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            dist/quick-json-reader-linux-x64.tar.gz
+            dist/quick-json-reader-macos-x64.tar.gz
+            dist/quick-json-reader-macos-arm64.tar.gz
+            dist/quick-json-reader-win-x64.zip
