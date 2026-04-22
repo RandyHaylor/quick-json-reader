@@ -38,7 +38,7 @@ jobs:
       - name: Build cross-platform binaries
         run: |
           npx pkg src/quick_json_reader.js \
-            --targets node20-linux-x64,node20-macos-x64,node20-macos-arm64,node20-win-x64 \
+            --targets node20-linux-x64,node20-linux-arm64,node20-macos-x64,node20-macos-arm64,node20-win-x64 \
             --output dist/quick-json-reader
 
       - name: Build web release zip (static HTML + shared engine)
@@ -49,27 +49,79 @@ jobs:
           cd dist/web-stage
           zip ../quick-json-reader-web.zip quick_json_reader_web.html quick_json_reader.js
 
+      - name: Build any-Node / Android-via-Termux script zip
+        run: |
+          mkdir -p dist/script-stage
+          cp src/quick_json_reader.js dist/script-stage/
+          cat > dist/script-stage/README-ANDROID-AND-ANY-NODE.txt <<'EOF'
+          Quick JSON Reader - any-platform Node script
+
+          This zip contains the single-file engine (quick_json_reader.js).
+          It runs anywhere Node.js 18+ is available, including:
+
+          - Android via Termux:
+              pkg install nodejs
+              node quick_json_reader.js your-file.json --show-stats
+          - Android via proot-distro / UserLAnd (Debian/Arch/etc.)
+          - ChromeOS Linux container
+          - Any Linux/macOS/Windows box with Node installed
+
+          No native binary, no architecture limits. See
+          https://github.com/RandyHaylor/quick-json-reader for CLI flags.
+          EOF
+          cd dist/script-stage
+          zip ../quick-json-reader-nodejs-script.zip quick_json_reader.js README-ANDROID-AND-ANY-NODE.txt
+
       - name: Rename/stage release artifacts
         run: |
           cd dist
+          echo "Raw pkg output:"
           ls -la
-          # yao-pkg outputs: quick-json-reader-linux, quick-json-reader-macos-x64, quick-json-reader-macos-arm64, quick-json-reader-win.exe
-          # Normalize names and compress where helpful.
-          if [ -f quick-json-reader-linux ]; then
+          # yao-pkg in recent versions outputs:
+          #   quick-json-reader-linux-x64
+          #   quick-json-reader-linux-arm64
+          #   quick-json-reader-macos-x64
+          #   quick-json-reader-macos-arm64
+          #   quick-json-reader-win-x64.exe
+          # Older versions used "-linux" / "-win.exe" — handle both robustly.
+          if [ -f quick-json-reader-linux ] && [ ! -f quick-json-reader-linux-x64 ]; then
             mv quick-json-reader-linux quick-json-reader-linux-x64
-            tar -czf quick-json-reader-linux-x64.tar.gz quick-json-reader-linux-x64
           fi
-          if [ -f quick-json-reader-macos-x64 ]; then
-            tar -czf quick-json-reader-macos-x64.tar.gz quick-json-reader-macos-x64
-          fi
-          if [ -f quick-json-reader-macos-arm64 ]; then
-            tar -czf quick-json-reader-macos-arm64.tar.gz quick-json-reader-macos-arm64
-          fi
-          if [ -f quick-json-reader-win.exe ]; then
+          if [ -f quick-json-reader-win.exe ] && [ ! -f quick-json-reader-win-x64.exe ]; then
             mv quick-json-reader-win.exe quick-json-reader-win-x64.exe
-            zip quick-json-reader-win-x64.zip quick-json-reader-win-x64.exe
           fi
+
+          for binary_name in quick-json-reader-linux-x64 quick-json-reader-linux-arm64 quick-json-reader-macos-x64 quick-json-reader-macos-arm64; do
+            if [ -f "$binary_name" ]; then
+              tar -czf "${binary_name}.tar.gz" "$binary_name"
+            else
+              echo "MISSING: $binary_name (will fail fast below)"
+            fi
+          done
+
+          if [ -f quick-json-reader-win-x64.exe ]; then
+            zip quick-json-reader-win-x64.zip quick-json-reader-win-x64.exe
+          else
+            echo "MISSING: quick-json-reader-win-x64.exe"
+          fi
+
+          echo "Staged artifacts:"
           ls -la
+
+          # Fail fast if any expected archive did not get produced.
+          for required_archive in \
+            quick-json-reader-linux-x64.tar.gz \
+            quick-json-reader-linux-arm64.tar.gz \
+            quick-json-reader-macos-x64.tar.gz \
+            quick-json-reader-macos-arm64.tar.gz \
+            quick-json-reader-win-x64.zip \
+            quick-json-reader-web.zip \
+            quick-json-reader-nodejs-script.zip; do
+            if [ ! -f "$required_archive" ]; then
+              echo "REQUIRED ARCHIVE MISSING: $required_archive"
+              exit 1
+            fi
+          done
 
       - name: Resolve release tag name
         id: resolve_release_tag
@@ -88,7 +140,9 @@ jobs:
           generate_release_notes: true
           files: |
             dist/quick-json-reader-linux-x64.tar.gz
+            dist/quick-json-reader-linux-arm64.tar.gz
             dist/quick-json-reader-macos-x64.tar.gz
             dist/quick-json-reader-macos-arm64.tar.gz
             dist/quick-json-reader-win-x64.zip
             dist/quick-json-reader-web.zip
+            dist/quick-json-reader-nodejs-script.zip
