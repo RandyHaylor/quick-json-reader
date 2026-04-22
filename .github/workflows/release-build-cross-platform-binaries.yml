@@ -205,7 +205,9 @@ jobs:
           globalThis.require.main = globalThis.module;
 
           JS_COMBINED_SHIM_PREFIX
-          cat src/quick_json_reader.js >> "$android_build_dir/combined.js"
+          # QuickJS module parser does not accept a "#!" shebang (reads # as
+          # a private-identifier start). Strip it if present before concat.
+          sed -E '1{/^#!/d;}' src/quick_json_reader.js >> "$android_build_dir/combined.js"
           cat >> "$android_build_dir/combined.js" <<'JS_COMBINED_SHIM_SUFFIX'
 
           // Drain the event loop, then exit with the code the CLI wrote to process.exitCode.
