@@ -3,6 +3,10 @@
 
 TRY IT HERE!  [randyhaylor.github.io/jsonreader/](https://randyhaylor.github.io/jsonreader/)
 
+<a href="https://randyhaylor.github.io/jsonreader/">
+  <img src="screenshots/quick-json-reader-web-ui.png" alt="Quick JSON Reader web UI" width="720">
+</a>
+
 > Fast JSON search tool with compact outputs for AI, logging, and application workflows—portable and easy to extend.
 
 ## Mission

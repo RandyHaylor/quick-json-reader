@@ -112,8 +112,9 @@
           </div>
         </div>
         <label class="check"><input id="showLineNumbers" type="checkbox" checked> Show line numbers</label>
+        <label class="check"><input id="showStats" type="checkbox"> Show stats</label>
         <label class="check"><input id="showSchema" type="checkbox"> Show schema only</label>
-        <div class="hint">Schema mode must be used alone.</div>
+        <div class="hint">Schema mode must be used alone. Stats prepends totals; in json output they appear under a top-level jsonStats key.</div>
       </div>
     </aside>
 
@@ -183,6 +184,7 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
       truncateLength: document.getElementById('truncateLength'),
       indentSize: document.getElementById('indentSize'),
       showLineNumbers: document.getElementById('showLineNumbers'),
+      showStats: document.getElementById('showStats'),
       showSchema: document.getElementById('showSchema'),
       refreshBtn: document.getElementById('refreshBtn'),
       resetBtn: document.getElementById('resetBtn'),
@@ -201,11 +203,12 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
       els.showLineNumbers.disabled = isJson || schema;
       if (isJson) els.showLineNumbers.checked = false;
       els.truncateLength.disabled = isJson || schema;
-      const schemaLocks = [els.searchKeys, els.searchVals, els.includeChildren, els.excludeMatching, els.excludeContaining, els.outputMode, els.indentSize];
+      const schemaLocks = [els.searchKeys, els.searchVals, els.includeChildren, els.excludeMatching, els.excludeContaining, els.outputMode, els.indentSize, els.showStats];
       for (const el of schemaLocks) el.disabled = schema;
       if (schema) {
         els.outputMode.value = 'txt';
         els.showLineNumbers.checked = true;
+        els.showStats.checked = false;
         els.truncateLength.value = '';
         els.indentSize.value = '2';
       }
@@ -223,6 +226,7 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
         truncateLineLength: els.truncateLength.value,
         showLineNumbers: els.showLineNumbers.checked,
         indentSize: els.indentSize.value || 2,
+        showStats: els.showStats.checked,
       };
     }
 
@@ -323,6 +327,7 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
       els.truncateLength.value = '';
       els.indentSize.value = '2';
       els.showLineNumbers.checked = true;
+      els.showStats.checked = false;
       els.showSchema.checked = false;
       syncUiRules();
       if (state.rawText) updateOutput();

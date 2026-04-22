@@ -41,6 +41,14 @@ jobs:
             --targets node20-linux-x64,node20-macos-x64,node20-macos-arm64,node20-win-x64 \
             --output dist/quick-json-reader
 
+      - name: Build web release zip (static HTML + shared engine)
+        run: |
+          mkdir -p dist/web-stage
+          cp web-ui/quick_json_reader_web.html dist/web-stage/
+          cp src/quick_json_reader.js dist/web-stage/
+          cd dist/web-stage
+          zip ../quick-json-reader-web.zip quick_json_reader_web.html quick_json_reader.js
+
       - name: Rename/stage release artifacts
         run: |
           cd dist
@@ -83,3 +91,4 @@ jobs:
             dist/quick-json-reader-macos-x64.tar.gz
             dist/quick-json-reader-macos-arm64.tar.gz
             dist/quick-json-reader-win-x64.zip
+            dist/quick-json-reader-web.zip
