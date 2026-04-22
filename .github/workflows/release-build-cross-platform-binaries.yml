@@ -179,8 +179,11 @@ jobs:
           import * as os from 'os';
 
           // quickjs-libc's js_std_add_helpers exposes globalThis.scriptArgs
-          // (argv[1..] as strings). There is no os.args in this build.
-          const nativeScriptArgs = Array.isArray(globalThis.scriptArgs) ? globalThis.scriptArgs : [];
+          // as the full argv including argv[0] (the binary path). Slice it
+          // off so the CLI sees only user-provided arguments.
+          const nativeScriptArgs = Array.isArray(globalThis.scriptArgs)
+            ? globalThis.scriptArgs.slice(1)
+            : [];
 
           globalThis.process = {
             argv: ['qjs-native', 'quick_json_reader.js', ...nativeScriptArgs],
