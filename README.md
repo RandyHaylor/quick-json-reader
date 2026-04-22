@@ -294,6 +294,70 @@ node quick_json_reader.js input.json --show-stats
 node --test test_quick_json_reader.js
 ```
 
+## Release Downloads
+
+Each tagged release publishes the following prebuilt assets at
+<https://github.com/RandyHaylor/quick-json-reader/releases/latest>.
+Pick the one for your target platform.
+
+### Linux x64 — `quick-json-reader-linux-x64.tar.gz`
+```bash
+tar -xzf quick-json-reader-linux-x64.tar.gz
+./quick-json-reader-linux-x64 input.json --show-stats
+```
+
+### Linux arm64 — `quick-json-reader-linux-arm64.tar.gz`
+For aarch64 Linux (Raspberry Pi, ARM VPS, ChromeOS Linux container).
+```bash
+tar -xzf quick-json-reader-linux-arm64.tar.gz
+./quick-json-reader-linux-arm64 input.json --search-vals error
+```
+
+### macOS Apple Silicon — `quick-json-reader-macos-arm64.tar.gz`
+For M1/M2/M3 Macs. Unsigned; first run may require right-click → Open to bypass Gatekeeper.
+```bash
+tar -xzf quick-json-reader-macos-arm64.tar.gz
+./quick-json-reader-macos-arm64 input.json --output json
+```
+
+### macOS Intel — `quick-json-reader-macos-x64.tar.gz`
+For Intel Macs. Same Gatekeeper note as Apple Silicon.
+```bash
+tar -xzf quick-json-reader-macos-x64.tar.gz
+./quick-json-reader-macos-x64 input.json --show-schema
+```
+
+### Windows x64 — `quick-json-reader-win-x64.zip`
+```powershell
+Expand-Archive quick-json-reader-win-x64.zip -DestinationPath .
+.\quick-json-reader-win-x64.exe input.json --exclude-fields-matching token password
+```
+
+### Android arm64 (native, static) — `quick-json-reader-android-arm64.tar.gz`
+Statically-linked aarch64 binary built via QuickJS. Works in `adb shell`, Termux, and can be bundled under `jniLibs/arm64-v8a/` in an APK for app-side exec.
+```bash
+tar -xzf quick-json-reader-android-arm64.tar.gz
+# adb shell (dev):
+adb push quick-json-reader-android-arm64 /data/local/tmp/
+adb shell /data/local/tmp/quick-json-reader-android-arm64 /sdcard/input.json --output json
+```
+
+### Static web build — `quick-json-reader-web.zip`
+HTML page + shared engine. Unzip and open the HTML in any browser — runs entirely client-side, no server.
+```bash
+unzip quick-json-reader-web.zip
+xdg-open quick_json_reader_web.html   # or open on macOS, start on Windows
+```
+
+### Any-Node script (including Android via Termux) — `quick-json-reader-nodejs-script.zip`
+Raw engine file + a short README. Needs Node 18+ on the target.
+```bash
+unzip quick-json-reader-nodejs-script.zip
+node quick_json_reader.js input.json --search-keys user --include-search-children
+# Termux on Android:
+pkg install nodejs && node quick_json_reader.js input.json --show-stats
+```
+
 ## Author
 
 Randy Haylor
