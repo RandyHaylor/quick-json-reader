@@ -31,6 +31,15 @@ dist/
 htmlcov/
 .tox/
 .nox/
+.hypothesis/
+
+# ============================================================================
+# Python tool caches
+# ============================================================================
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
 
 # ============================================================================
 # Logs / runtime
@@ -70,26 +79,33 @@ desktop.ini
 !.env.example
 
 # ============================================================================
-# Hidden files & folders (your requirement)
+# Hidden files & folders (targeted ignore)
 # ============================================================================
-.*
+.cache/
+.local/
+.history/
+.python_history
+
+.cursor/
+.cursor-cache/
+.cursorindex/
+
+# ============================================================================
+# Keep important project dotfiles
+# ============================================================================
 !.gitignore
 !.gitattributes
-!.env.example
 !.github/
+!.env.example
+
+# Optional but reasonable to keep trackable
+!.editorconfig
+!.pre-commit-config.yaml
+!.python-version
 
 # ============================================================================
-# Python-specific extras worth keeping (from GitHub template)
+# Sample data
 # ============================================================================
-.mypy_cache/
-.ruff_cache/
-.pyre/
-.pytype/
-.hypothesis/
-
-# ============================================================================
-# Optional: keep sample data tracked (recommended)
-# ============================================================================
-# (DO NOT ignore JSON/CSV so examples can be committed)
+# Keep JSON/CSV examples tracked
 # *.json
 # *.csv
