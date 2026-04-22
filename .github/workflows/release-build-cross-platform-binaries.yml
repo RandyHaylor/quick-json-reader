@@ -41,6 +41,109 @@ jobs:
             --targets node20-linux-x64,node20-linux-arm64,node20-macos-x64,node20-macos-arm64,node20-win-x64 \
             --output dist/quick-json-reader
 
+      - name: Integration test - exercise packaged linux-x64 binary with complex flags
+        run: |
+          integration_test_input_path=/tmp/integration_test_input.json
+          integration_test_expected_path=/tmp/integration_test_expected.json
+          integration_test_actual_path=/tmp/integration_test_actual.json
+
+          cat > "$integration_test_input_path" <<'INPUT_JSON'
+          {
+            "users": [
+              {
+                "id": 1,
+                "name": "Alice",
+                "token": "SECRET_A",
+                "events": [
+                  {"type": "login",    "status": "ok"},
+                  {"type": "purchase", "status": "failed"}
+                ]
+              },
+              {
+                "id": 2,
+                "name": "Bob",
+                "token": "SECRET_B",
+                "events": [
+                  {"type": "login", "status": "ok"}
+                ]
+              }
+            ],
+            "system": {
+              "status": "ok",
+              "password": "SUPER_SECRET"
+            }
+          }
+          INPUT_JSON
+
+          # Expected: find all "failed" records, include their children,
+          # exclude token + password entirely, emit JSON with jsonStats prepended.
+          cat > "$integration_test_expected_path" <<'EXPECTED_JSON'
+          {
+            "jsonStats": {
+              "nestingDepth": 6,
+              "totalObjects": 7,
+              "totalArrays": 3,
+              "jsonValid": true
+            },
+            "users": [
+              {
+                "events": [
+                  {
+                    "status": "failed"
+                  }
+                ]
+              }
+            ]
+          }
+          EXPECTED_JSON
+
+          integration_test_binary=./dist/quick-json-reader-linux-x64
+          if [ ! -f "$integration_test_binary" ]; then
+            integration_test_binary=./dist/quick-json-reader-linux
+          fi
+          chmod +x "$integration_test_binary"
+
+          "$integration_test_binary" "$integration_test_input_path" \
+            --search-vals failed \
+            --include-search-children \
+            --exclude-fields-matching token password \
+            --show-stats \
+            --output json \
+            > "$integration_test_actual_path"
+
+          echo "--- expected ---"
+          cat "$integration_test_expected_path"
+          echo "--- actual ---"
+          cat "$integration_test_actual_path"
+
+          # Compare as parsed JSON (normalizes whitespace) so minor
+          # totalCharCount shifts from heredoc indentation do not false-fail.
+          # We still require deep structural equality.
+          node - "$integration_test_expected_path" "$integration_test_actual_path" <<'COMPARISON_SCRIPT'
+          const fs = require('node:fs');
+          const [, , expectedPath, actualPath] = process.argv;
+          const expected = JSON.parse(fs.readFileSync(expectedPath, 'utf8'));
+          const actual   = JSON.parse(fs.readFileSync(actualPath,   'utf8'));
+
+          // totalCharCount depends on exact input bytes; assert it's a positive number, then strip before deep compare.
+          if (typeof actual.jsonStats?.totalCharCount !== 'number' || actual.jsonStats.totalCharCount <= 0) {
+            console.error('INTEGRATION FAIL: jsonStats.totalCharCount missing or non-positive');
+            process.exit(1);
+          }
+          delete expected.jsonStats.totalCharCount;
+          delete actual.jsonStats.totalCharCount;
+
+          const stringifiedExpected = JSON.stringify(expected);
+          const stringifiedActual   = JSON.stringify(actual);
+          if (stringifiedExpected !== stringifiedActual) {
+            console.error('INTEGRATION FAIL: transform output does not match expected');
+            console.error('expected (no totalCharCount):', stringifiedExpected);
+            console.error('actual   (no totalCharCount):', stringifiedActual);
+            process.exit(1);
+          }
+          console.log('INTEGRATION OK: complex flag combo produced expected transform');
+          COMPARISON_SCRIPT
+
       - name: Build web release zip (static HTML + shared engine)
         run: |
           mkdir -p dist/web-stage
