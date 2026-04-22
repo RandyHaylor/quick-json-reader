@@ -152,6 +152,152 @@ jobs:
           cd dist/web-stage
           zip ../quick-json-reader-web.zip quick_json_reader_web.html quick_json_reader.js
 
+      - name: Build Android-native arm64 binary via QuickJS + static cross-compile
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user-static
+
+          quickjs_dir=/tmp/quickjs_source_clone
+          android_build_dir=/tmp/android_build_staging
+          mkdir -p "$android_build_dir"
+          git clone --depth=1 https://github.com/bellard/quickjs "$quickjs_dir"
+
+          # 1. Build host tooling (qjsc + host libquickjs.a)
+          pushd "$quickjs_dir"
+          make -j2 qjsc
+          cp qjsc "$android_build_dir/host_qjsc"
+          # 2. Rebuild libquickjs.a for aarch64 target only
+          make clean
+          make -j2 libquickjs.a CROSS_PREFIX=aarch64-linux-gnu- CONFIG_LTO=
+          cp libquickjs.a "$android_build_dir/libquickjs_arm64.a"
+          popd
+
+          # 3. Compose shim + source into a single ES module (runs as one file)
+          cat > "$android_build_dir/combined.js" <<'JS_COMBINED_SHIM_PREFIX'
+          import * as std from 'std';
+          import * as os from 'os';
+
+          globalThis.process = {
+            argv: ['qjs', 'quick_json_reader.js', ...os.args.slice(1)],
+            stdout: { write: (text) => { std.out.puts(text); return true; } },
+            stderr: { write: (text) => { std.err.puts(text); return true; } },
+            exitCode: 0,
+            exit: (code) => { std.exit(code | 0); },
+          };
+          globalThis.require = (moduleName) => {
+            if (moduleName === 'node:fs' || moduleName === 'fs') {
+              return {
+                readFileSync: (filePath, encoding) => {
+                  const content = std.loadFile(filePath);
+                  if (content === null) {
+                    const error = new Error(filePath);
+                    error.code = 'ENOENT';
+                    throw error;
+                  }
+                  return content;
+                },
+              };
+            }
+            throw new Error('unsupported require in android build: ' + moduleName);
+          };
+          globalThis.module = { exports: {} };
+          globalThis.require.main = globalThis.module;
+
+          JS_COMBINED_SHIM_PREFIX
+          cat src/quick_json_reader.js >> "$android_build_dir/combined.js"
+          cat >> "$android_build_dir/combined.js" <<'JS_COMBINED_SHIM_SUFFIX'
+
+          // Drain the event loop, then exit with the code the CLI wrote to process.exitCode.
+          std.exit(globalThis.process.exitCode | 0);
+          JS_COMBINED_SHIM_SUFFIX
+
+          # 4. Host-compile combined.js to embedded bytecode C source.
+          #    -e emits C source only (no main), -m treats input as a module.
+          #    -N sets the exported symbol basename so main.c can reference it.
+          "$android_build_dir/host_qjsc" -e -m -N combined_bytecode \
+            -o "$android_build_dir/combined_bytecode.c" \
+            "$android_build_dir/combined.js"
+
+          # 5. Minimal C main that initializes QuickJS + std/os + evals the embedded bytecode.
+          cat > "$android_build_dir/main_android_arm64_entry.c" <<'C_MAIN'
+          #include <stdint.h>
+          #include <stddef.h>
+          #include "quickjs-libc.h"
+
+          extern const uint8_t  qjsc_combined_bytecode[];
+          extern const uint32_t qjsc_combined_bytecode_size;
+
+          int main(int argc, char **argv) {
+            JSRuntime *runtime = JS_NewRuntime();
+            js_std_set_worker_new_context_func(JS_NewContext);
+            js_std_init_handlers(runtime);
+
+            JSContext *ctx = JS_NewContext(runtime);
+            JS_SetModuleLoaderFunc(runtime, NULL, js_module_loader, NULL);
+            js_std_add_helpers(ctx, argc, argv);
+            js_init_module_std(ctx, "std");
+            js_init_module_os(ctx, "os");
+
+            js_std_eval_binary(ctx, qjsc_combined_bytecode, qjsc_combined_bytecode_size, 0);
+            js_std_loop(ctx);
+
+            js_std_free_handlers(runtime);
+            JS_FreeContext(ctx);
+            JS_FreeRuntime(runtime);
+            return 0;
+          }
+          C_MAIN
+
+          # 6. Cross-compile: static link against target libquickjs.a + glibc-static.
+          aarch64-linux-gnu-gcc -static -O2 \
+            -I "$quickjs_dir" \
+            "$android_build_dir/main_android_arm64_entry.c" \
+            "$android_build_dir/combined_bytecode.c" \
+            "$android_build_dir/libquickjs_arm64.a" \
+            -lm -lpthread -ldl \
+            -o dist/quick-json-reader-android-arm64
+
+          file dist/quick-json-reader-android-arm64
+          ls -la dist/quick-json-reader-android-arm64
+
+      - name: Integration test - exercise android-arm64 binary under qemu with complex flags
+        run: |
+          set -euo pipefail
+          android_integration_actual_path=/tmp/android_integration_actual.json
+
+          qemu-aarch64-static dist/quick-json-reader-android-arm64 \
+            /tmp/integration_test_input.json \
+            --search-vals failed \
+            --include-search-children \
+            --exclude-fields-matching token password \
+            --show-stats \
+            --output json \
+            > "$android_integration_actual_path"
+
+          echo "--- android-arm64 actual ---"
+          cat "$android_integration_actual_path"
+
+          node - /tmp/integration_test_expected.json "$android_integration_actual_path" <<'ANDROID_COMPARISON_SCRIPT'
+          const fs = require('node:fs');
+          const [, , expectedPath, actualPath] = process.argv;
+          const expected = JSON.parse(fs.readFileSync(expectedPath, 'utf8'));
+          const actual   = JSON.parse(fs.readFileSync(actualPath,   'utf8'));
+          if (typeof actual.jsonStats?.totalCharCount !== 'number' || actual.jsonStats.totalCharCount <= 0) {
+            console.error('ANDROID INTEGRATION FAIL: jsonStats.totalCharCount missing or non-positive');
+            process.exit(1);
+          }
+          delete expected.jsonStats?.totalCharCount;
+          delete actual.jsonStats.totalCharCount;
+          if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+            console.error('ANDROID INTEGRATION FAIL: transform output does not match expected');
+            console.error('expected:', JSON.stringify(expected));
+            console.error('actual  :', JSON.stringify(actual));
+            process.exit(1);
+          }
+          console.log('ANDROID INTEGRATION OK: android-arm64 binary produced expected transform under qemu');
+          ANDROID_COMPARISON_SCRIPT
+
       - name: Build any-Node / Android-via-Termux script zip
         run: |
           mkdir -p dist/script-stage
@@ -194,7 +340,7 @@ jobs:
             mv quick-json-reader-win.exe quick-json-reader-win-x64.exe
           fi
 
-          for binary_name in quick-json-reader-linux-x64 quick-json-reader-linux-arm64 quick-json-reader-macos-x64 quick-json-reader-macos-arm64; do
+          for binary_name in quick-json-reader-linux-x64 quick-json-reader-linux-arm64 quick-json-reader-macos-x64 quick-json-reader-macos-arm64 quick-json-reader-android-arm64; do
             if [ -f "$binary_name" ]; then
               tar -czf "${binary_name}.tar.gz" "$binary_name"
             else
@@ -217,6 +363,7 @@ jobs:
             quick-json-reader-linux-arm64.tar.gz \
             quick-json-reader-macos-x64.tar.gz \
             quick-json-reader-macos-arm64.tar.gz \
+            quick-json-reader-android-arm64.tar.gz \
             quick-json-reader-win-x64.zip \
             quick-json-reader-web.zip \
             quick-json-reader-nodejs-script.zip; do
@@ -246,6 +393,7 @@ jobs:
             dist/quick-json-reader-linux-arm64.tar.gz
             dist/quick-json-reader-macos-x64.tar.gz
             dist/quick-json-reader-macos-arm64.tar.gz
+            dist/quick-json-reader-android-arm64.tar.gz
             dist/quick-json-reader-win-x64.zip
             dist/quick-json-reader-web.zip
             dist/quick-json-reader-nodejs-script.zip
