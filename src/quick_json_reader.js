@@ -81,7 +81,9 @@ function normalizeConfig(overrides = {}) {
 
   if (config.output === 'json') {
     config.showLineNumbers = false;
-    config.truncateLineLength = null;
+    // truncateLineLength is ALLOWED in json mode — it breaks strict
+    // JSON validity, but exposes a type silhouette (first char of each
+    // value reveals the type) which is useful for large-file scanning.
   } else {
     config.showLineNumbers = typeof config.showLineNumbers === 'boolean' ? config.showLineNumbers : true;
   }
@@ -511,15 +513,28 @@ function childrenAreArrayish(children) {
 
 class JsonRenderer {
   render(context) {
+    let renderedOutput;
     if (context.config.showNodeIndexes) {
       // Destructive / visual-only mode: emit JSON-shaped text with [N]
       // sibling-index prefixes inline. The result is NOT valid JSON — it
       // is meant for reading and copy-pasting addresses, not for piping
       // into downstream JSON consumers.
-      return this.renderJsonShapedWithVisualIndexes(context.tree, context.config);
+      renderedOutput = this.renderJsonShapedWithVisualIndexes(context.tree, context.config);
+    } else {
+      const payload = this.project(context.tree);
+      renderedOutput = JSON.stringify(payload, null, 2);
     }
-    const payload = this.project(context.tree);
-    return JSON.stringify(payload, null, 2);
+    // Optional line truncation. Also destructive — breaks strict JSON
+    // validity — but collapses each line to a type silhouette:
+    // the first character after "key": (", {, [, digit, t, f, n)
+    // reveals the value's JSON type without reading the whole value.
+    if (context.config.truncateLineLength !== null) {
+      renderedOutput = renderedOutput
+        .split('\n')
+        .map((singleLine) => truncateText(singleLine, context.config.truncateLineLength))
+        .join('\n');
+    }
+    return renderedOutput;
   }
 
   project(tree) {
