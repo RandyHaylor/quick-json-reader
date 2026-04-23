@@ -9,6 +9,38 @@ TRY IT HERE!  [randyhaylor.github.io/jsonreader/](https://randyhaylor.github.io/
 
 > Fast JSON search tool with compact outputs for AI, logging, and application workflows—portable and easy to extend.
 
+## Contents
+
+<table>
+<tr>
+<td valign="top">
+
+- [Mission](#mission)
+- [Implementations](#implementations)
+- [Overview](#overview)
+- [Runtime Environments](#runtime-environments)
+- [Features](#features)
+
+</td>
+<td valign="top">
+
+- [CLI Usage](#cli-usage)
+- [Browser Usage](#browser-usage)
+- [Examples](#examples)
+- [Output Behavior](#output-behavior)
+
+</td>
+<td valign="top">
+
+- [Data Fidelity](#data-fidelity)
+- [Testing](#testing)
+- [Release Downloads](#release-downloads)
+- [Author](#author)
+
+</td>
+</tr>
+</table>
+
 ## Mission
 
 Provide a simple, powerful, and deterministic tool for humans and AI agents to quickly and efficiently view JSON content.
