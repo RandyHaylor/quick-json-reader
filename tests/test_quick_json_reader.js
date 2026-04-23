@@ -129,6 +129,40 @@ test('--show-schema cannot be combined with --show-stats', () => {
   );
 });
 
+test('runWithJsonText auto-detects JSON Lines and wraps records into an array', () => {
+  const jsonLinesText = [
+    '{"id":1,"type":"login","status":"ok"}',
+    '{"id":2,"type":"purchase","status":"failed"}',
+    '{"id":3,"type":"logout","status":"ok"}',
+  ].join('\n');
+  const result = mod.runWithJsonText(jsonLinesText, { output: 'json', showStats: true });
+  const parsed = JSON.parse(result.outputText);
+  // 3 records -> 3 top-level JSONL objects (totalObjects >= 3) + 1 wrapper array
+  assert.equal(parsed.jsonStats.totalArrays >= 1, true);
+  assert.ok(parsed.jsonStats.totalObjects >= 3);
+});
+
+test('runWithJsonText preserves single-document JSON behavior', () => {
+  const result = mod.runWithJsonText('{"user": {"name": "alice"}}', { output: 'json' });
+  const parsed = JSON.parse(result.outputText);
+  assert.equal(parsed.user.name, 'alice');
+});
+
+test('CLI auto-detects JSONL file and produces valid stats', () => {
+  const fs = require('node:fs');
+  const jsonlFixturePath = '/tmp/integration_test_jsonl_fixture.jsonl';
+  fs.writeFileSync(jsonlFixturePath, [
+    '{"event":"start","ok":true}',
+    '{"event":"middle","ok":true}',
+    '{"event":"end","ok":false}',
+    '',
+  ].join('\n'));
+  const result = spawnSync('node', [CLI_PATH, jsonlFixturePath, '--show-stats', '--output', 'json'], { encoding: 'utf8' });
+  assert.equal(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.jsonStats.totalObjects, 3);
+});
+
 test('runWithValue does not emit to stderr even if gate was previously on', () => {
   const chunks = [];
   const originalWrite = process.stderr.write.bind(process.stderr);

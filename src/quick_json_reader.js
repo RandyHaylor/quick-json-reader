@@ -544,6 +544,32 @@ class Pipeline {
   }
 }
 
+function parseJsonDocumentOrJsonLines(rawText) {
+  // Always build an array of parsed records. For a regular JSON file, we
+  // push one entry. For a JSONL file, we push one entry per line. Callers
+  // can inspect records.length to decide whether to unwrap.
+  const parsedRecords = [];
+  try {
+    parsedRecords.push(JSON.parse(rawText));
+    return { records: parsedRecords, isJsonLines: false };
+  } catch (primaryJsonParseError) {
+    const lines = rawText.split(/\r?\n/);
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const trimmedLine = lines[lineIndex].trim();
+      if (trimmedLine === '') continue;
+      try {
+        parsedRecords.push(JSON.parse(trimmedLine));
+      } catch (_) {
+        throw primaryJsonParseError;
+      }
+    }
+    if (parsedRecords.length < 2) {
+      throw primaryJsonParseError;
+    }
+    return { records: parsedRecords, isJsonLines: true };
+  }
+}
+
 class ParseJsonStage {
   run(context) {
     progress('performing parse...');
@@ -551,8 +577,14 @@ class ParseJsonStage {
       throw new CliError('file access not available in this runtime');
     }
     context.rawText = fs.readFileSync(context.config.sourceJson, 'utf8');
-    context.rawJson = JSON.parse(context.rawText);
-    progress('parse complete: 1 file loaded');
+    const { records, isJsonLines } = parseJsonDocumentOrJsonLines(context.rawText);
+    context.isJsonLines = isJsonLines;
+    // Parse always yields an array of documents. A single-element array
+    // (regular JSON file, or a JSONL with exactly one record) is unwrapped
+    // so the output does not show a meaningless [0] wrapper. Two or more
+    // records stay as an array so each document gets its own index.
+    context.rawJson = records.length === 1 ? records[0] : records;
+    progress(`parse complete: 1 file loaded (${records.length} document${records.length === 1 ? '' : 's'}${isJsonLines ? ', JSON Lines' : ''})`);
     return context;
   }
 }
@@ -673,7 +705,9 @@ function runWithValue(rawJson, configOverrides = {}) {
 
 function runWithJsonText(jsonText, configOverrides = {}) {
   __SHOW_APP_LOG = false;
-  return runWithValue(JSON.parse(jsonText), configOverrides);
+  const { records } = parseJsonDocumentOrJsonLines(jsonText);
+  const rawJson = records.length === 1 ? records[0] : records;
+  return runWithValue(rawJson, configOverrides);
 }
 
 function runCli(argv = process.argv.slice(2)) {
