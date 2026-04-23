@@ -163,6 +163,59 @@ test('CLI auto-detects JSONL file and produces valid stats', () => {
   assert.equal(parsed.jsonStats.totalObjects, 3);
 });
 
+test('showNodeIndexes prefixes each txt line with local sibling index', () => {
+  const result = mod.runWithValue(sample, { output: 'txt', showNodeIndexes: true, showLineNumbers: false });
+  assert.match(result.outputText, /^\[0\] user/m);
+  assert.match(result.outputText, /^\s+\[0\] name: alice/m);
+  assert.match(result.outputText, /^\s+\[2\] nested/m);
+});
+
+test('maxRenderDepth caps how deep text output walks', () => {
+  const deepSample = { a: { b: { c: { d: 'leaf' } } } };
+  const resultAtDepth0 = mod.runWithValue(deepSample, { output: 'txt', showLineNumbers: false, maxRenderDepth: 0 });
+  assert.match(resultAtDepth0.outputText, /^a$/m);
+  assert.doesNotMatch(resultAtDepth0.outputText, /\bleaf\b/);
+  const resultAtDepth2 = mod.runWithValue(deepSample, { output: 'txt', showLineNumbers: false, maxRenderDepth: 2 });
+  assert.match(resultAtDepth2.outputText, /\ba\b/);
+  assert.match(resultAtDepth2.outputText, /\bc\b/);
+  assert.doesNotMatch(resultAtDepth2.outputText, /\bleaf\b/);
+});
+
+test('showNodePathSteps drills to a nested subtree by sibling indexes', () => {
+  const nestedSample = { alpha: { beta: { gamma: 'deep' } }, other: 'ignored' };
+  // alpha is the 0th child; beta is the 0th child of alpha; gamma is the 0th child of beta.
+  const result = mod.runWithValue(nestedSample, { output: 'txt', showLineNumbers: false, showNodePathSteps: [0, 0] });
+  assert.match(result.outputText, /gamma: deep/);
+  assert.doesNotMatch(result.outputText, /ignored/);
+});
+
+test('showNodePathSteps step out of range throws a clear error', () => {
+  assert.throws(
+    () => mod.runWithValue({ only: 'one child' }, { showNodePathSteps: [99] }),
+    /--show-node step out of range/
+  );
+});
+
+test('showFullAddresses prefixes each line with the complete path from root', () => {
+  const result = mod.runWithValue(sample, { output: 'txt', showFullAddresses: true, showLineNumbers: false });
+  assert.match(result.outputText, /^\[0\] user/m);
+  assert.match(result.outputText, /^\s+\[0-0\] name: alice/m);
+  assert.match(result.outputText, /^\s+\[0-2\] nested/m);
+  assert.match(result.outputText, /^\s+\[0-2-0\] secret:/m);
+});
+
+test('CLI --show-node-indexes with --output json produces visual-only indexed output', () => {
+  const fs = require('node:fs');
+  const visualJsonFixturePath = '/tmp/integration_test_visual_json_fixture.json';
+  fs.writeFileSync(visualJsonFixturePath, JSON.stringify({ a: { b: 1 }, c: [true, false] }));
+  const result = spawnSync('node', [CLI_PATH, visualJsonFixturePath, '--show-node-indexes', '--output', 'json'], { encoding: 'utf8' });
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /\[0\] "a":/);
+  assert.match(result.stdout, /\[1\] "c":/);
+  // NOTE: this output is intentionally not valid JSON — do not JSON.parse it.
+  assert.throws(() => JSON.parse(result.stdout));
+});
+
 test('runWithValue does not emit to stderr even if gate was previously on', () => {
   const chunks = [];
   const originalWrite = process.stderr.write.bind(process.stderr);

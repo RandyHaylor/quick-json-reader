@@ -105,7 +105,7 @@ jobs:
 
           "$integration_test_binary" "$integration_test_input_path" \
             --search-vals failed \
-            --include-search-children \
+            --show-search-hit-sub-trees \
             --exclude-fields-matching token password \
             --show-stats \
             --output json \
@@ -278,7 +278,7 @@ jobs:
           qemu-aarch64-static dist/quick-json-reader-android-arm64 \
             /tmp/integration_test_input.json \
             --search-vals failed \
-            --include-search-children \
+            --show-search-hit-sub-trees \
             --exclude-fields-matching token password \
             --show-stats \
             --output json \

@@ -81,7 +81,7 @@
         <input id="searchKeys" type="text" placeholder="text to find keys">
         <label for="searchVals">Search values</label>
         <input id="searchVals" type="text" placeholder="text to find vals">
-        <label class="check"><input id="includeChildren" type="checkbox"> Include search children</label>
+        <label class="check"><input id="showSubTreesOfSearchHits" type="checkbox"> Show search hit sub-trees</label>
         <div class="hint">Separate terms with spaces.</div>
       </div>
 
@@ -177,7 +177,7 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
       fileMeta: document.getElementById('fileMeta'),
       searchKeys: document.getElementById('searchKeys'),
       searchVals: document.getElementById('searchVals'),
-      includeChildren: document.getElementById('includeChildren'),
+      showSubTreesOfSearchHits: document.getElementById('showSubTreesOfSearchHits'),
       excludeMatching: document.getElementById('excludeMatching'),
       excludeContaining: document.getElementById('excludeContaining'),
       outputMode: document.getElementById('outputMode'),
@@ -203,7 +203,7 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
       els.showLineNumbers.disabled = isJson || schema;
       if (isJson) els.showLineNumbers.checked = false;
       els.truncateLength.disabled = isJson || schema;
-      const schemaLocks = [els.searchKeys, els.searchVals, els.includeChildren, els.excludeMatching, els.excludeContaining, els.outputMode, els.indentSize, els.showStats];
+      const schemaLocks = [els.searchKeys, els.searchVals, els.showSubTreesOfSearchHits, els.excludeMatching, els.excludeContaining, els.outputMode, els.indentSize, els.showStats];
       for (const el of schemaLocks) el.disabled = schema;
       if (schema) {
         els.outputMode.value = 'txt';
@@ -220,7 +220,7 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
         showSchema: els.showSchema.checked,
         searchKeys: words(els.searchKeys.value),
         searchVals: words(els.searchVals.value),
-        includeSearchChildren: els.includeChildren.checked,
+        includeSearchChildren: els.showSubTreesOfSearchHits.checked,
         excludeFieldsMatching: words(els.excludeMatching.value),
         excludeFieldsContaining: words(els.excludeContaining.value),
         truncateLineLength: els.truncateLength.value,
@@ -320,7 +320,7 @@ example,details,why csv output is useful for spreadsheets and tabular workflows<
     function resetForm() {
       els.searchKeys.value = '';
       els.searchVals.value = '';
-      els.includeChildren.checked = false;
+      els.showSubTreesOfSearchHits.checked = false;
       els.excludeMatching.value = '';
       els.excludeContaining.value = '';
       els.outputMode.value = 'txt';

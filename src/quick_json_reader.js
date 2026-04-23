@@ -36,13 +36,17 @@ function createDefaultConfig() {
     showSchema: false,
     searchKeys: [],
     searchVals: [],
-    includeSearchChildren: false,
+    showSearchHitSubTrees: false,
     excludeFieldsMatching: [],
     excludeFieldsContaining: [],
     truncateLineLength: null,
     showLineNumbers: true,
     indentSize: 2,
     showStats: false,
+    showNodeIndexes: false,
+    showFullAddresses: false,
+    showNodePathSteps: [],
+    maxRenderDepth: null,
   };
 }
 
@@ -54,9 +58,26 @@ function normalizeConfig(overrides = {}) {
   config.searchVals = normalizeTerms(config.searchVals || []);
   config.excludeFieldsMatching = (config.excludeFieldsMatching || []).map(String);
   config.excludeFieldsContaining = normalizeTerms(config.excludeFieldsContaining || []);
-  config.includeSearchChildren = Boolean(config.includeSearchChildren);
+  config.showSearchHitSubTrees = Boolean(config.showSearchHitSubTrees);
   config.showSchema = Boolean(config.showSchema);
   config.showStats = Boolean(config.showStats);
+  config.showNodeIndexes = Boolean(config.showNodeIndexes);
+  config.showFullAddresses = Boolean(config.showFullAddresses);
+  config.showNodePathSteps = Array.isArray(config.showNodePathSteps) ? config.showNodePathSteps.map((step) => {
+    const parsedStep = Number.parseInt(step, 10);
+    if (Number.isNaN(parsedStep) || parsedStep < 0) {
+      throw new CliError(`invalid step in --show-node path: ${step}`);
+    }
+    return parsedStep;
+  }) : [];
+  if (config.maxRenderDepth !== null && config.maxRenderDepth !== undefined && config.maxRenderDepth !== '') {
+    config.maxRenderDepth = Number.parseInt(config.maxRenderDepth, 10);
+    if (Number.isNaN(config.maxRenderDepth) || config.maxRenderDepth < 0) {
+      throw new CliError('invalid value for --depth');
+    }
+  } else {
+    config.maxRenderDepth = null;
+  }
 
   if (config.output === 'json') {
     config.showLineNumbers = false;
@@ -142,8 +163,8 @@ function parseArgs(argv) {
         i = nextIndex;
         break;
       }
-      case '--include-search-children':
-        config.includeSearchChildren = true;
+      case '--show-search-hit-sub-trees':
+        config.showSearchHitSubTrees = true;
         i += 1;
         break;
       case '--exclude-fields-matching': {
@@ -178,6 +199,35 @@ function parseArgs(argv) {
         config.showStats = true;
         i += 1;
         break;
+      case '--show-node-indexes':
+        config.showNodeIndexes = true;
+        i += 1;
+        break;
+      case '--show-full-addresses':
+        config.showFullAddresses = true;
+        i += 1;
+        break;
+      case '--show-node': {
+        i += 1;
+        if (!argv[i] || argv[i].startsWith('--')) throw new CliError('missing value for --show-node');
+        const pathString = argv[i];
+        config.showNodePathSteps = pathString.split('-').map((step) => {
+          const parsedStep = Number.parseInt(step, 10);
+          if (Number.isNaN(parsedStep) || parsedStep < 0) {
+            throw new CliError(`invalid step in --show-node path: ${step}`);
+          }
+          return parsedStep;
+        });
+        i += 1;
+        break;
+      }
+      case '--depth':
+        i += 1;
+        if (!argv[i] || argv[i].startsWith('--')) throw new CliError('missing value for --depth');
+        config.maxRenderDepth = Number.parseInt(argv[i], 10);
+        if (Number.isNaN(config.maxRenderDepth) || config.maxRenderDepth < 0) throw new CliError('invalid value for --depth');
+        i += 1;
+        break;
       case '--indent-size':
         i += 1;
         if (!argv[i] || argv[i].startsWith('--')) throw new CliError('missing value for --indent-size');
@@ -204,13 +254,17 @@ function validateArgs(config) {
     config.output !== 'txt',
     config.searchKeys.length > 0,
     config.searchVals.length > 0,
-    config.includeSearchChildren,
+    config.showSearchHitSubTrees,
     config.excludeFieldsMatching.length > 0,
     config.excludeFieldsContaining.length > 0,
     config.truncateLineLength !== null,
     !config.showLineNumbers,
     config.indentSize !== 2,
     config.showStats,
+    config.showNodeIndexes,
+    config.showFullAddresses,
+    config.showNodePathSteps.length > 0,
+    config.maxRenderDepth !== null,
   ];
   if (incompatible.some(Boolean)) {
     throw new CliError('--show-schema not compatible with other arguments');
@@ -328,7 +382,7 @@ class NodeBuilder {
 
   includeAllVisibleDescendants(info) {
     if (!this.rules.searchActive()) return true;
-    return info.directMatch && this.config.includeSearchChildren;
+    return info.directMatch && this.config.showSearchHitSubTrees;
   }
 
   buildChildren(value, info) {
@@ -383,30 +437,54 @@ function hasContent(treeNode) {
 
 class TextRenderer {
   render(context) {
-    const lines = this.buildLines(context.tree, context.config.indentSize);
+    const lines = this.buildLines(context.tree, context.config);
     const finalLines = context.config.output === 'txt'
       ? applyTextLineRules(lines, context.config)
       : lines;
     return finalLines.join('\n');
   }
 
-  buildLines(tree, indentSize) {
+  buildLines(tree, config) {
     if (!tree) return ['<no matches>'];
+    const indentSize = config.indentSize;
+    const showNodeIndexes = config.showNodeIndexes;
+    const showFullAddresses = config.showFullAddresses;
+    const showAnyAddressPrefix = showNodeIndexes || showFullAddresses;
+    const maxRenderDepth = config.maxRenderDepth; // null or a non-negative integer
     const lines = [];
-    const walk = (treeNode, depth) => {
+
+    const walk = (treeNode, depth, siblingIndexOrNull, accumulatedAddressSteps) => {
       const hasLabel = treeNode.label !== null && treeNode.label !== '';
       if (hasLabel) {
         const indent = ' '.repeat(depth * indentSize);
-        lines.push(treeNode.valueText !== null
-          ? `${indent}${treeNode.label}: ${treeNode.valueText}`
-          : `${indent}${treeNode.label}`);
+        let addressPrefix = '';
+        if (showFullAddresses) {
+          addressPrefix = `[${accumulatedAddressSteps.join('-')}] `;
+        } else if (showNodeIndexes && siblingIndexOrNull !== null) {
+          addressPrefix = `[${siblingIndexOrNull}] `;
+        }
+        // When address prefixing is on and the label is a bare array
+        // index like "[0]", the prefix already carries the same info — drop
+        // the label text to avoid "[0] [0]" duplication.
+        const labelLooksLikeArrayIndex = /^\[\d+\]$/.test(treeNode.label);
+        const labelForRendering = showAnyAddressPrefix && labelLooksLikeArrayIndex ? '' : treeNode.label;
+        if (labelForRendering === '' && treeNode.valueText === null) {
+          lines.push(`${indent}${addressPrefix.trimEnd()}`);
+        } else if (treeNode.valueText !== null) {
+          lines.push(`${indent}${addressPrefix}${labelForRendering}${labelForRendering ? ': ' : ''}${treeNode.valueText}`);
+        } else {
+          lines.push(`${indent}${addressPrefix}${labelForRendering}`);
+        }
       }
       const nextDepth = (treeNode.label === null || treeNode.label === '') ? depth : depth + 1;
-      for (const child of treeNode.children) {
-        walk(child, nextDepth);
+      if (maxRenderDepth !== null && nextDepth > maxRenderDepth) {
+        return;
+      }
+      for (let childIndex = 0; childIndex < treeNode.children.length; childIndex++) {
+        walk(treeNode.children[childIndex], nextDepth, childIndex, [...accumulatedAddressSteps, childIndex]);
       }
     };
-    walk(tree, 0);
+    walk(tree, 0, null, []);
     return lines.length > 0 ? lines : ['<no matches>'];
   }
 }
@@ -433,6 +511,13 @@ function childrenAreArrayish(children) {
 
 class JsonRenderer {
   render(context) {
+    if (context.config.showNodeIndexes) {
+      // Destructive / visual-only mode: emit JSON-shaped text with [N]
+      // sibling-index prefixes inline. The result is NOT valid JSON — it
+      // is meant for reading and copy-pasting addresses, not for piping
+      // into downstream JSON consumers.
+      return this.renderJsonShapedWithVisualIndexes(context.tree, context.config);
+    }
     const payload = this.project(context.tree);
     return JSON.stringify(payload, null, 2);
   }
@@ -453,6 +538,38 @@ class JsonRenderer {
       return treeNode.children.map((child) => this.payload(child));
     }
     return Object.fromEntries(treeNode.children.map((child) => [child.label, this.payload(child)]));
+  }
+
+  renderJsonShapedWithVisualIndexes(tree, config) {
+    if (!tree) return 'null';
+    const indentUnit = ' '.repeat(config.indentSize || 2);
+    const maxRenderDepth = config.maxRenderDepth;
+    return this.renderValueFromTreeNodeWithVisualIndexes(tree, indentUnit, '', 0, maxRenderDepth);
+  }
+
+  renderValueFromTreeNodeWithVisualIndexes(treeNode, indentUnit, currentIndent, currentDepth, maxRenderDepth) {
+    if (treeNode.valueText !== null && treeNode.children.length === 0) {
+      return JSON.stringify(treeNode.valueText);
+    }
+    if (treeNode.children.length === 0) {
+      return 'null';
+    }
+    if (maxRenderDepth !== null && currentDepth > maxRenderDepth) {
+      return '"..."';
+    }
+    const childrenLookLikeArray = childrenAreArrayish(treeNode.children);
+    const deeperIndent = currentIndent + indentUnit;
+    const renderedChildren = treeNode.children.map((childNode, siblingIndex) => {
+      const childValue = this.renderValueFromTreeNodeWithVisualIndexes(childNode, indentUnit, deeperIndent, currentDepth + 1, maxRenderDepth);
+      if (childrenLookLikeArray) {
+        return `${deeperIndent}[${siblingIndex}] ${childValue}`;
+      }
+      return `${deeperIndent}[${siblingIndex}] ${JSON.stringify(childNode.label)}: ${childValue}`;
+    });
+    if (childrenLookLikeArray) {
+      return `[\n${renderedChildren.join(',\n')}\n${currentIndent}]`;
+    }
+    return `{\n${renderedChildren.join(',\n')}\n${currentIndent}}`;
   }
 }
 
@@ -589,6 +706,42 @@ class ParseJsonStage {
   }
 }
 
+function getOrderedChildEntries(parentValue) {
+  // Uniform addressing: both arrays and objects expose their children as an
+  // ordered list of [stepIndex, childValue] pairs. Array items are addressed
+  // by their natural index; object key/value pairs are addressed by the
+  // insertion-order position of the key.
+  if (Array.isArray(parentValue)) {
+    return parentValue.map((childValue, stepIndex) => [stepIndex, childValue]);
+  }
+  if (parentValue && typeof parentValue === 'object') {
+    return Object.values(parentValue).map((childValue, stepIndex) => [stepIndex, childValue]);
+  }
+  return [];
+}
+
+class DrillToNodePathStage {
+  run(context) {
+    const pathSteps = context.config.showNodePathSteps;
+    if (!pathSteps || pathSteps.length === 0) return context;
+    progress(`performing drill to node path: ${pathSteps.join('-')}`);
+    let currentValue = context.rawJson;
+    for (let depthIndex = 0; depthIndex < pathSteps.length; depthIndex++) {
+      const requestedStep = pathSteps[depthIndex];
+      const childEntries = getOrderedChildEntries(currentValue);
+      if (requestedStep >= childEntries.length) {
+        throw new CliError(
+          `--show-node step out of range at depth ${depthIndex}: asked for index ${requestedStep}, but this node only has ${childEntries.length} child${childEntries.length === 1 ? '' : 'ren'}`
+        );
+      }
+      currentValue = childEntries[requestedStep][1];
+    }
+    context.rawJson = currentValue;
+    progress('drill complete');
+    return context;
+  }
+}
+
 function computeJsonStats(rawJson, rawText) {
   let totalObjects = 0;
   let totalArrays = 0;
@@ -680,6 +833,7 @@ class RenderStage {
 function defaultPipeline() {
   return new Pipeline([
     new ParseJsonStage(),
+    new DrillToNodePathStage(),
     new SearchReportStage(),
     new BuildTreeStage(),
     new RenderStage(),
@@ -689,6 +843,7 @@ function defaultPipeline() {
 
 function memoryPipeline() {
   return new Pipeline([
+    new DrillToNodePathStage(),
     new SearchReportStage(),
     new BuildTreeStage(),
     new RenderStage(),
