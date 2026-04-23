@@ -40,6 +40,9 @@ function createDefaultConfig() {
     excludeFieldsMatching: [],
     excludeFieldsContaining: [],
     truncateLineLength: null,
+    truncateKeyLength: null,
+    truncateValueLength: null,
+    truncateObjectNameLength: null,
     showLineNumbers: true,
     indentSize: 2,
     showStats: false,
@@ -96,6 +99,19 @@ function normalizeConfig(overrides = {}) {
   } else {
     config.truncateLineLength = null;
   }
+
+  // Normalize each of the three per-class truncation limits. -1 (or any
+  // negative number) means "do not truncate this class". Any non-negative
+  // integer is a character cap. Null/undefined/empty also mean no cap.
+  const normalizeOptionalTruncationLimit = (rawValue, settingLabel) => {
+    if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+    const parsedLimit = Number.parseInt(rawValue, 10);
+    if (Number.isNaN(parsedLimit)) throw new CliError(`invalid value for ${settingLabel}`);
+    return parsedLimit < 0 ? null : parsedLimit;
+  };
+  config.truncateKeyLength = normalizeOptionalTruncationLimit(config.truncateKeyLength, 'truncateKeyLength');
+  config.truncateValueLength = normalizeOptionalTruncationLimit(config.truncateValueLength, 'truncateValueLength');
+  config.truncateObjectNameLength = normalizeOptionalTruncationLimit(config.truncateObjectNameLength, 'truncateObjectNameLength');
 
   if (config.indentSize !== null && config.indentSize !== undefined && config.indentSize !== '') {
     config.indentSize = Number.parseInt(config.indentSize, 10);
@@ -205,6 +221,22 @@ function parseArgs(argv) {
         config.showNodeIndexes = true;
         i += 1;
         break;
+      case '--truncate-key-val-obj': {
+        i += 1;
+        if (argv[i] === undefined || argv[i + 1] === undefined || argv[i + 2] === undefined) {
+          throw new CliError('--truncate-key-val-obj requires three integer values (key-limit val-limit obj-limit); use -1 for "no truncation"');
+        }
+        const parseSinglePerClassTruncationLimit = (rawValue, classLabel) => {
+          const parsedLimit = Number.parseInt(rawValue, 10);
+          if (Number.isNaN(parsedLimit)) throw new CliError(`invalid ${classLabel} limit for --truncate-key-val-obj: ${rawValue}`);
+          return parsedLimit < 0 ? null : parsedLimit;
+        };
+        config.truncateKeyLength = parseSinglePerClassTruncationLimit(argv[i], 'key');
+        config.truncateValueLength = parseSinglePerClassTruncationLimit(argv[i + 1], 'val');
+        config.truncateObjectNameLength = parseSinglePerClassTruncationLimit(argv[i + 2], 'obj');
+        i += 3;
+        break;
+      }
       case '--show-full-addresses':
         config.showFullAddresses = true;
         i += 1;
@@ -260,6 +292,9 @@ function validateArgs(config) {
     config.excludeFieldsMatching.length > 0,
     config.excludeFieldsContaining.length > 0,
     config.truncateLineLength !== null,
+    config.truncateKeyLength !== null,
+    config.truncateValueLength !== null,
+    config.truncateObjectNameLength !== null,
     !config.showLineNumbers,
     config.indentSize !== 2,
     config.showStats,
@@ -468,12 +503,14 @@ class TextRenderer {
         // When address prefixing is on and the label is a bare array
         // index like "[0]", the prefix already carries the same info — drop
         // the label text to avoid "[0] [0]" duplication.
-        const labelLooksLikeArrayIndex = /^\[\d+\]$/.test(treeNode.label);
-        const labelForRendering = showAnyAddressPrefix && labelLooksLikeArrayIndex ? '' : treeNode.label;
+        const labelLooksLikeArrayIndex = isArrayIndexLabel(treeNode.label);
+        const labelWithClassTruncation = applyLabelClassTruncation(treeNode.label, treeNode, config);
+        const labelForRendering = showAnyAddressPrefix && labelLooksLikeArrayIndex ? '' : labelWithClassTruncation;
+        const valueTextWithClassTruncation = applyValueClassTruncation(treeNode.valueText, config);
         if (labelForRendering === '' && treeNode.valueText === null) {
           lines.push(`${indent}${addressPrefix.trimEnd()}`);
         } else if (treeNode.valueText !== null) {
-          lines.push(`${indent}${addressPrefix}${labelForRendering}${labelForRendering ? ': ' : ''}${treeNode.valueText}`);
+          lines.push(`${indent}${addressPrefix}${labelForRendering}${labelForRendering ? ': ' : ''}${valueTextWithClassTruncation}`);
         } else {
           lines.push(`${indent}${addressPrefix}${labelForRendering}`);
         }
@@ -496,6 +533,27 @@ function truncateText(text, maxLen) {
   if (maxLen <= 0) return '';
   if (maxLen === 1) return '…';
   return `${text.slice(0, maxLen - 1)}…`;
+}
+
+function isArrayIndexLabel(label) {
+  return typeof label === 'string' && /^\[\d+\]$/.test(label);
+}
+
+function applyLabelClassTruncation(label, treeNode, config) {
+  // Labels that are array positional indexes (e.g. "[12]") are never
+  // truncated — they are positional identifiers, not names.
+  if (label === null || label === undefined || label === '') return label;
+  if (isArrayIndexLabel(label)) return label;
+  const labelPointsAtScalar = treeNode.valueText !== null;
+  const classLimit = labelPointsAtScalar ? config.truncateKeyLength : config.truncateObjectNameLength;
+  if (classLimit === null) return label;
+  return truncateText(label, classLimit);
+}
+
+function applyValueClassTruncation(valueText, config) {
+  if (valueText === null || valueText === undefined) return valueText;
+  if (config.truncateValueLength === null) return valueText;
+  return truncateText(valueText, config.truncateValueLength);
 }
 
 function applyTextLineRules(lines, config) {
@@ -521,7 +579,7 @@ class JsonRenderer {
       // into downstream JSON consumers.
       renderedOutput = this.renderJsonShapedWithVisualIndexes(context.tree, context.config);
     } else {
-      const payload = this.project(context.tree);
+      const payload = this.project(context.tree, context.config);
       renderedOutput = JSON.stringify(payload, null, 2);
     }
     // Optional line truncation. Also destructive — breaks strict JSON
@@ -537,34 +595,38 @@ class JsonRenderer {
     return renderedOutput;
   }
 
-  project(tree) {
+  project(tree, config) {
     if (!tree) return null;
     if (tree.label === null || tree.label === '') {
       if (tree.children.length === 0) return null;
-      return Object.fromEntries(tree.children.map((child) => [child.label, this.payload(child)]));
+      return Object.fromEntries(tree.children.map((child) => [this.truncatedChildLabel(child, config), this.payload(child, config)]));
     }
-    return { [tree.label]: this.payload(tree) };
+    return { [this.truncatedChildLabel(tree, config)]: this.payload(tree, config) };
   }
 
-  payload(treeNode) {
-    if (treeNode.valueText !== null) return treeNode.valueText;
+  truncatedChildLabel(childTreeNode, config) {
+    return applyLabelClassTruncation(childTreeNode.label, childTreeNode, config);
+  }
+
+  payload(treeNode, config) {
+    if (treeNode.valueText !== null) return applyValueClassTruncation(treeNode.valueText, config);
     if (treeNode.children.length === 0) return null;
     if (childrenAreArrayish(treeNode.children)) {
-      return treeNode.children.map((child) => this.payload(child));
+      return treeNode.children.map((child) => this.payload(child, config));
     }
-    return Object.fromEntries(treeNode.children.map((child) => [child.label, this.payload(child)]));
+    return Object.fromEntries(treeNode.children.map((child) => [this.truncatedChildLabel(child, config), this.payload(child, config)]));
   }
 
   renderJsonShapedWithVisualIndexes(tree, config) {
     if (!tree) return 'null';
     const indentUnit = ' '.repeat(config.indentSize || 2);
     const maxRenderDepth = config.maxRenderDepth;
-    return this.renderValueFromTreeNodeWithVisualIndexes(tree, indentUnit, '', 0, maxRenderDepth);
+    return this.renderValueFromTreeNodeWithVisualIndexes(tree, indentUnit, '', 0, maxRenderDepth, config);
   }
 
-  renderValueFromTreeNodeWithVisualIndexes(treeNode, indentUnit, currentIndent, currentDepth, maxRenderDepth) {
+  renderValueFromTreeNodeWithVisualIndexes(treeNode, indentUnit, currentIndent, currentDepth, maxRenderDepth, config) {
     if (treeNode.valueText !== null && treeNode.children.length === 0) {
-      return JSON.stringify(treeNode.valueText);
+      return JSON.stringify(applyValueClassTruncation(treeNode.valueText, config));
     }
     if (treeNode.children.length === 0) {
       return 'null';
@@ -575,11 +637,12 @@ class JsonRenderer {
     const childrenLookLikeArray = childrenAreArrayish(treeNode.children);
     const deeperIndent = currentIndent + indentUnit;
     const renderedChildren = treeNode.children.map((childNode, siblingIndex) => {
-      const childValue = this.renderValueFromTreeNodeWithVisualIndexes(childNode, indentUnit, deeperIndent, currentDepth + 1, maxRenderDepth);
+      const childValue = this.renderValueFromTreeNodeWithVisualIndexes(childNode, indentUnit, deeperIndent, currentDepth + 1, maxRenderDepth, config);
       if (childrenLookLikeArray) {
         return `${deeperIndent}[${siblingIndex}] ${childValue}`;
       }
-      return `${deeperIndent}[${siblingIndex}] ${JSON.stringify(childNode.label)}: ${childValue}`;
+      const childLabelAfterClassTruncation = applyLabelClassTruncation(childNode.label, childNode, config);
+      return `${deeperIndent}[${siblingIndex}] ${JSON.stringify(childLabelAfterClassTruncation)}: ${childValue}`;
     });
     if (childrenLookLikeArray) {
       return `[\n${renderedChildren.join(',\n')}\n${currentIndent}]`;
