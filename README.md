@@ -80,15 +80,10 @@ node quick_json_reader.js input.json
 
 All examples below use `examples/sample_easy_json_reader_input.json` as input.
 
-<table>
-<tr>
-<td>
-
-**Default (txt)**
+#### Default (txt)
 
 ```bash
-node src/quick_json_reader.js \
-  examples/sample_easy_json_reader_input.json
+node src/quick_json_reader.js examples/sample_easy_json_reader_input.json
 ```
 
 ```
@@ -110,15 +105,10 @@ node src/quick_json_reader.js \
 16 |   long: The quick brown fox jumps over the lazy dog.
 ```
 
-</td>
-<td>
-
-**Schema**
+#### Schema
 
 ```bash
-node src/quick_json_reader.js \
-  examples/sample_easy_json_reader_input.json \
-  --show-schema
+node src/quick_json_reader.js examples/sample_easy_json_reader_input.json --show-schema
 ```
 
 ```json
@@ -144,15 +134,10 @@ node src/quick_json_reader.js \
 }
 ```
 
-</td>
-<td>
-
-**Exclude fields**
+#### Exclude fields
 
 ```bash
-node src/quick_json_reader.js \
-  examples/sample_easy_json_reader_input.json \
-  --exclude-fields-matching token secretNote
+node src/quick_json_reader.js examples/sample_easy_json_reader_input.json --exclude-fields-matching token secretNote
 ```
 
 ```
@@ -172,17 +157,10 @@ node src/quick_json_reader.js \
 14 |   long: The quick brown fox jumps over the lazy dog.
 ```
 
-</td>
-</tr>
-<tr>
-<td>
-
-**Search + include children**
+#### Search + include children
 
 ```bash
-node src/quick_json_reader.js \
-  examples/sample_easy_json_reader_input.json \
-  --search-vals failed --include-search-children
+node src/quick_json_reader.js examples/sample_easy_json_reader_input.json --search-vals failed --include-search-children
 ```
 
 ```
@@ -192,15 +170,10 @@ node src/quick_json_reader.js \
 4 |       status: failed
 ```
 
-</td>
-<td>
-
-**Show stats**
+#### Show stats
 
 ```bash
-node src/quick_json_reader.js \
-  examples/sample_easy_json_reader_input.json \
-  --show-stats
+node src/quick_json_reader.js examples/sample_easy_json_reader_input.json --show-stats
 ```
 
 ```
@@ -215,15 +188,10 @@ json-valid: true
  ...
 ```
 
-</td>
-<td>
-
-**JSON output + search-keys**
+#### JSON output + search-keys
 
 ```bash
-node src/quick_json_reader.js \
-  examples/sample_easy_json_reader_input.json \
-  --output json --search-keys status
+node src/quick_json_reader.js examples/sample_easy_json_reader_input.json --output json --search-keys status
 ```
 
 ```json
@@ -243,10 +211,6 @@ node src/quick_json_reader.js \
   }
 }
 ```
-
-</td>
-</tr>
-</table>
 
 ## Browser Usage
 
