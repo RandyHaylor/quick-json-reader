@@ -56,8 +56,8 @@ This project serves as a foundational engine for multiple use cases:
         - Create a `quick-json-reader` folder inside your agent's `skills/` directory
         - Download [`ai-agent-tool/SKILL.md`](ai-agent-tool/SKILL.md) and [`src/quick_json_reader.js`](src/quick_json_reader.js) into that folder
         - Your agent can now run `node quick-json-reader/quick_json_reader.js <file>.json ...` with any of the documented flags
-    - Use the `--output json` and `--show-stats` flags to get structured output + document metrics an agent can reason over without reparsing
-    - Combine `--search-keys` / `--search-vals` with `--exclude-fields-matching` to narrow the token budget before feeding content to an LLM
+    - The AI agent will know to use `--output json` together with `--show-stats` so it gets structured output plus document metrics up front, drastically reducing the token cost of parsing and reading JSON files
+    - The AI agent will know to combine `--search-keys` / `--search-vals` with `--exclude-fields-matching` to scope down to exactly the relevant branch and strip noise, drastically reducing the token cost of parsing and reading JSON files
 - **JSON reader web modules** — single-file static UI you can drop into any site or embed in a dashboard.
     - Unzip the `quick-json-reader-web.zip` release asset for a ready-to-serve page (HTML + JS only, no backend)
     - Or embed `src/quick_json_reader.js` and call `QuickJsonReader.runWithJsonText(text, config)` from your own page
