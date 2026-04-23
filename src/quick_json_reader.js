@@ -50,6 +50,7 @@ function createDefaultConfig() {
     showFullAddresses: false,
     showNodePathSteps: [],
     maxRenderDepth: null,
+    hideLiteralSubstrings: [],
   };
 }
 
@@ -66,6 +67,9 @@ function normalizeConfig(overrides = {}) {
   config.showStats = Boolean(config.showStats);
   config.showNodeIndexes = Boolean(config.showNodeIndexes);
   config.showFullAddresses = Boolean(config.showFullAddresses);
+  config.hideLiteralSubstrings = Array.isArray(config.hideLiteralSubstrings)
+    ? config.hideLiteralSubstrings.filter((substring) => typeof substring === 'string' && substring.length > 0)
+    : [];
   config.showNodePathSteps = Array.isArray(config.showNodePathSteps) ? config.showNodePathSteps.map((step) => {
     const parsedStep = Number.parseInt(step, 10);
     if (Number.isNaN(parsedStep) || parsedStep < 0) {
@@ -221,6 +225,13 @@ function parseArgs(argv) {
         config.showNodeIndexes = true;
         i += 1;
         break;
+      case '--hide': {
+        i += 1;
+        const { values, nextIndex } = takeList(argv, i);
+        config.hideLiteralSubstrings = values;
+        i = nextIndex;
+        break;
+      }
       case '--truncate-key-val-obj': {
         i += 1;
         if (argv[i] === undefined || argv[i + 1] === undefined || argv[i + 2] === undefined) {
@@ -302,6 +313,7 @@ function validateArgs(config) {
     config.showFullAddresses,
     config.showNodePathSteps.length > 0,
     config.maxRenderDepth !== null,
+    config.hideLiteralSubstrings.length > 0,
   ];
   if (incompatible.some(Boolean)) {
     throw new CliError('--show-schema not compatible with other arguments');
@@ -908,6 +920,21 @@ class RenderStage {
   }
 }
 
+class HideLiteralSubstringsStage {
+  run(context) {
+    const substringsToHide = context.config.hideLiteralSubstrings;
+    if (!substringsToHide || substringsToHide.length === 0) return context;
+    progress(`performing hide-literal substitution for ${substringsToHide.length} pattern(s)`);
+    let filteredOutput = context.outputText || '';
+    for (const substring of substringsToHide) {
+      filteredOutput = filteredOutput.split(substring).join('');
+    }
+    context.outputText = filteredOutput;
+    progress('hide-literal substitution complete');
+    return context;
+  }
+}
+
 function defaultPipeline() {
   return new Pipeline([
     new ParseJsonStage(),
@@ -916,6 +943,7 @@ function defaultPipeline() {
     new BuildTreeStage(),
     new RenderStage(),
     new StatsDecorationStage(),
+    new HideLiteralSubstringsStage(),
   ]);
 }
 
@@ -926,6 +954,7 @@ function memoryPipeline() {
     new BuildTreeStage(),
     new RenderStage(),
     new StatsDecorationStage(),
+    new HideLiteralSubstringsStage(),
   ]);
 }
 

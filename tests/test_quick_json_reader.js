@@ -216,6 +216,19 @@ test('CLI --show-node-indexes with --output json produces visual-only indexed ou
   assert.throws(() => JSON.parse(result.stdout));
 });
 
+test('hideLiteralSubstrings strips each literal from the rendered output', () => {
+  const urlSample = { api: 'https://example.com/x', docs: 'https://example.com/y' };
+  const result = mod.runWithValue(urlSample, {
+    output: 'txt',
+    showLineNumbers: false,
+    hideLiteralSubstrings: ['https://', 'example.com'],
+  });
+  assert.doesNotMatch(result.outputText, /https:\/\//);
+  assert.doesNotMatch(result.outputText, /example\.com/);
+  assert.match(result.outputText, /\/x/);
+  assert.match(result.outputText, /\/y/);
+});
+
 test('runWithValue does not emit to stderr even if gate was previously on', () => {
   const chunks = [];
   const originalWrite = process.stderr.write.bind(process.stderr);
