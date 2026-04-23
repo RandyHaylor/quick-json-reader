@@ -51,9 +51,22 @@ This tool is designed to make large or complex JSON data immediately understanda
 
 This project serves as a foundational engine for multiple use cases:
 
-- JSON reader web modules
-- AI agent tooling
-- Logging and data automation
+- **AI agent tooling** — deterministic JSON projection with explicit search/exclude/stats flags makes outputs easy for agents to parse and act on.
+    - Add as a skill for any agent
+        - Create a `quick-json-reader` folder inside your agent's `skills/` directory
+        - Download [`ai-agent-tool/SKILL.md`](ai-agent-tool/SKILL.md) and [`src/quick_json_reader.js`](src/quick_json_reader.js) into that folder
+        - Your agent can now run `node quick-json-reader/quick_json_reader.js <file>.json ...` with any of the documented flags
+    - Use the `--output json` and `--show-stats` flags to get structured output + document metrics an agent can reason over without reparsing
+    - Combine `--search-keys` / `--search-vals` with `--exclude-fields-matching` to narrow the token budget before feeding content to an LLM
+- **JSON reader web modules** — single-file static UI you can drop into any site or embed in a dashboard.
+    - Unzip the `quick-json-reader-web.zip` release asset for a ready-to-serve page (HTML + JS only, no backend)
+    - Or embed `src/quick_json_reader.js` and call `QuickJsonReader.runWithJsonText(text, config)` from your own page
+    - Runs fully client-side — safe for sensitive JSON that should never leave the browser
+- **Logging and data automation** — deterministic CLI output slots into shell pipelines, CI, and batch jobs.
+    - Pipe straight into downstream tooling: `./quick-json-reader huge.log.json --search-vals error --output csv | your-aggregator`
+    - Use `--exclude-fields-matching` to strip PII/secrets before archiving or sharing logs
+    - Use `--show-stats` in health-check scripts to alert when char count, nesting depth, or object count drifts outside expected ranges
+    - Silent by default; pass `--show-app-log` only when debugging the pipeline itself
 
 ## Overview
 
